@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # 1. Database MongoDB
   mongodb:
     image: mongo:latest
     container_name: bip_mongodb
@@ -8,6 +9,71 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    networks:
+      - bip_network
+
+  # 2. Product Service
+  product-service:
+    build: ./product-service
+    container_name: bip_product_service
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - MONGO_URI=mongodb://mongodb:27017/product_db
+    depends_on:
+      - mongodb
+    networks:
+      - bip_network
+
+  # 3. Order Service
+  order-service:
+    build: ./order-service
+    container_name: bip_order_service
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - MONGO_URI=mongodb://mongodb:27017/order_db
+      - PRODUCT_SERVICE_URL=http://product-service:8001
+    depends_on:
+      - mongodb
+      - product-service
+    networks:
+      - bip_network
+
+  # 4. API Gateway
+  api-gateway:
+    build: ./api-gateway
+    container_name: bip_api_gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - PRODUCT_SERVICE_URL=http://product-service:8001
+      - ORDER_SERVICE_URL=http://order-service:8002
+    depends_on:
+      - product-service
+      - order-service
+    networks:
+      - bip_network
+
+  # 5. Frontend (Next.js)
+  frontend:
+    build: ./frontend
+    container_name: bip_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - bip_network
 
 volumes:
   mongo_data:
+
+networks:
+  bip_network:
+    driver: bridge
